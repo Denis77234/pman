@@ -2,17 +2,26 @@ package archiver
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	reqstruct "packetManager/internal/Request"
 	"path/filepath"
+
+	reqstruct "packetManager/internal/Request"
 )
 
 type Archiver struct {
 	req         reqstruct.Request
 	packagesDir string
+}
+
+func New(request reqstruct.Request, packagesDir string) Archiver {
+
+	arch := Archiver{req: request, packagesDir: packagesDir}
+
+	return arch
 }
 
 func (a Archiver) pckDir() string {
@@ -35,11 +44,32 @@ func (a Archiver) makeDirIfNotExist() error {
 	return nil
 }
 
-func New(request reqstruct.Request, packagesDir string) Archiver {
+func (a Archiver) makeDependencyFile() error {
 
-	arch := Archiver{req: request, packagesDir: packagesDir}
+	fileName := "dependency.json"
 
-	return arch
+	filePath := fmt.Sprintf("%v/%v", a.pckDir(), fileName)
+
+	dep := a.req.Packets
+
+	bytes, err := json.Marshal(dep)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	_, err = file.Write(bytes)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (a Archiver) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) error {
@@ -109,5 +139,8 @@ func (a Archiver) Archive() error {
 			return err
 		}
 	}
+
+	a.makeDependencyFile()
+
 	return nil
 }
