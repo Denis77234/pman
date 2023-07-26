@@ -1,0 +1,11 @@
+{
+  "name": "packet-1",
+  "ver": "1.10",
+  "targets": [
+    "/home/denis/GolandProjects/packetManager/test/files/*.txt",
+    { "path": "./archive_this2/*", "exclude": "*.tmp" }
+  ],
+  "packets": [
+    { "name": "packet-3", "ver": "<=2.0" }
+  ]
+}
