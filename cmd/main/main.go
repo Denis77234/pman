@@ -29,7 +29,7 @@ func main() {
 		fmt.Println(jserr)
 	}
 
-	arch := archiver.New(request)
+	arch := archiver.New(request, "../../packages")
 	err = arch.Archive()
 	if err != nil {
 		log.Fatal(err)

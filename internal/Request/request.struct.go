@@ -15,6 +15,6 @@ type Request struct {
 }
 
 func (r Request) ArchiveName(extension string) string {
-	name := fmt.Sprintf("%v.%v", r.Name, extension)
+	name := fmt.Sprintf("%v.%v", r.Ver, extension)
 	return name
 }

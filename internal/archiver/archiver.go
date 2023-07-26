@@ -2,6 +2,7 @@ package archiver
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,12 +11,33 @@ import (
 )
 
 type Archiver struct {
-	req reqstruct.Request
+	req         reqstruct.Request
+	packagesDir string
 }
 
-func New(request reqstruct.Request) Archiver {
+func (a Archiver) pckDir() string {
+	dir := fmt.Sprintf("%v/%v", a.packagesDir, a.req.Name)
+	return dir
+}
 
-	arch := Archiver{req: request}
+func (a Archiver) zipPath() string {
+	zipPath := fmt.Sprintf("%v/%v", a.pckDir(), a.req.ArchiveName("tar"))
+	return zipPath
+}
+
+func (a Archiver) makeDirIfNotExist() error {
+	if _, err := os.Stat(a.pckDir()); errors.Is(err, os.ErrNotExist) {
+		err = os.Mkdir(a.pckDir(), os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func New(request reqstruct.Request, packagesDir string) Archiver {
+
+	arch := Archiver{req: request, packagesDir: packagesDir}
 
 	return arch
 }
@@ -65,7 +87,12 @@ func (a Archiver) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) erro
 
 func (a Archiver) Archive() error {
 
-	arch, err := os.Create(a.req.ArchiveName("tar"))
+	err := a.makeDirIfNotExist()
+	if err != nil {
+		return err
+	}
+
+	arch, err := os.Create(a.zipPath())
 	if err != nil {
 		fmt.Println(err)
 	}
