@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 	"packetManager/internal/Request"
-	"packetManager/internal/archiver"
+	"packetManager/internal/packager"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 		fmt.Println(jserr)
 	}
 
-	arch := archiver.New(request, "../../packages")
+	arch := packager.New(request, "../../packages")
 	err = arch.Archive()
 	if err != nil {
 		log.Fatal(err)

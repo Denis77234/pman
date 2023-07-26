@@ -1,4 +1,4 @@
-package archiver
+package packager
 
 import (
 	"archive/zip"
@@ -12,31 +12,31 @@ import (
 	reqstruct "packetManager/internal/Request"
 )
 
-type Archiver struct {
+type Packager struct {
 	req         reqstruct.Request
 	packagesDir string
 }
 
-func New(request reqstruct.Request, packagesDir string) Archiver {
+func New(request reqstruct.Request, packagesDir string) Packager {
 
-	arch := Archiver{req: request, packagesDir: packagesDir}
+	arch := Packager{req: request, packagesDir: packagesDir}
 
 	return arch
 }
 
-func (a Archiver) pckDir() string {
-	dir := fmt.Sprintf("%v/%v", a.packagesDir, a.req.Name)
+func (p Packager) pckDir() string {
+	dir := fmt.Sprintf("%v/%v", p.packagesDir, p.req.Name)
 	return dir
 }
 
-func (a Archiver) zipPath() string {
-	zipPath := fmt.Sprintf("%v/%v", a.pckDir(), a.req.ArchiveName("tar"))
+func (p Packager) zipPath() string {
+	zipPath := fmt.Sprintf("%v/%v", p.pckDir(), p.req.ArchiveName("tar"))
 	return zipPath
 }
 
-func (a Archiver) makeDirIfNotExist() error {
-	if _, err := os.Stat(a.pckDir()); errors.Is(err, os.ErrNotExist) {
-		err = os.Mkdir(a.pckDir(), os.ModePerm)
+func (p Packager) makeDirIfNotExist() error {
+	if _, err := os.Stat(p.pckDir()); errors.Is(err, os.ErrNotExist) {
+		err = os.Mkdir(p.pckDir(), os.ModePerm)
 		if err != nil {
 			return err
 		}
@@ -44,35 +44,34 @@ func (a Archiver) makeDirIfNotExist() error {
 	return nil
 }
 
-func (a Archiver) makeDependencyFile() error {
+func (p Packager) makeDependencyFile() error {
 
 	fileName := "dependency.json"
 
-	filePath := fmt.Sprintf("%v/%v", a.pckDir(), fileName)
+	filePath := fmt.Sprintf("%v/%v", p.pckDir(), fileName)
 
-	dep := a.req.Packets
-
-	bytes, err := json.Marshal(dep)
-	if err != nil {
-		return err
-	}
+	dep := p.req.Packets
 
 	file, err := os.Create(filePath)
 	if err != nil {
 		return err
 	}
 
-	defer file.Close()
+	enc := json.NewEncoder(file)
 
-	_, err = file.Write(bytes)
+	enc.SetEscapeHTML(false)
+
+	err = enc.Encode(dep)
 	if err != nil {
 		return err
 	}
 
+	defer file.Close()
+
 	return nil
 }
 
-func (a Archiver) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) error {
+func (p Packager) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) error {
 	//search for files
 	files, err := filepath.Glob(targ.Path)
 	if err != nil {
@@ -115,14 +114,14 @@ func (a Archiver) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) erro
 	return nil
 }
 
-func (a Archiver) Archive() error {
+func (p Packager) Archive() error {
 
-	err := a.makeDirIfNotExist()
+	err := p.makeDirIfNotExist()
 	if err != nil {
 		return err
 	}
 
-	arch, err := os.Create(a.zipPath())
+	arch, err := os.Create(p.zipPath())
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -133,14 +132,14 @@ func (a Archiver) Archive() error {
 
 	defer zipWriter.Close()
 
-	for _, target := range a.req.Targets {
-		err := a.archiveMask(target, zipWriter)
+	for _, target := range p.req.Targets {
+		err := p.archiveMask(target, zipWriter)
 		if err != nil {
 			return err
 		}
 	}
 
-	a.makeDependencyFile()
+	p.makeDependencyFile()
 
 	return nil
 }
