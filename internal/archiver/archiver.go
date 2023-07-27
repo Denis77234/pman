@@ -47,31 +47,72 @@ func (a Archiver) isDependencyExist(path string) bool {
 	return true
 }
 
-func (a Archiver) version(path string) (*semver.Version, error) {
+func (a Archiver) version(path string) string {
 
 	str := strings.Replace(filepath.Base(path), ".tar", "", -1)
 
-	ver, err := semver.NewVersion(str)
-	if err != nil {
-		return nil, err
-	}
-	return ver, nil
+	return str
 }
 
-//func (a Archiver) checkVerson() {
-//
-//}
+func (a Archiver) checkVersion(file, lookingForVer string) (bool, error) {
 
-func (a Archiver) findDepPackage(path, ver string) error {
+	factVer := a.version(file)
+
+	c, err := semver.NewConstraint(lookingForVer)
+	if err != nil {
+
+		return false, err
+	}
+
+	v, err := semver.NewVersion(factVer)
+	if err != nil {
+		return false, err
+	}
+
+	b, err1 := c.Validate(v)
+	if err != nil {
+		return false, err1[0]
+	}
+
+	return b, nil
+
+}
+
+func (a Archiver) findDepPackage(path, ver string) (string, error) {
 
 	files, err := filepath.Glob(path + "/*.tar")
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	fmt.Println(a.version(files[0]))
+	var validVersionFile string
 
-	return nil
+	for _, file := range files {
+		valid, err := a.checkVersion(file, ver)
+		if err != nil {
+			return "", err
+		}
+		if valid {
+			if validVersionFile == "" {
+				validVersionFile = file
+			} else {
+				validVer := a.version(validVersionFile)
+				currentFileVer := a.version(file)
+				compareStr := ">" + validVer
+
+				bigger, _ := a.checkVersion(currentFileVer, compareStr)
+				if bigger {
+					validVersionFile = file
+				}
+
+			}
+		}
+
+	}
+
+	fmt.Println(validVersionFile)
+
+	return validVersionFile, nil
 }
 
 func (a Archiver) FindDependencies() error {
@@ -92,6 +133,8 @@ func (a Archiver) FindDependencies() error {
 		return err
 	}
 
+	depPackages := make([]string, 0, 10)
+
 	for _, dep := range dependency {
 		depPath := a.dependencyPath(dep.Name)
 
@@ -99,8 +142,13 @@ func (a Archiver) FindDependencies() error {
 			return errors.New("Dependecy not found")
 		}
 
-		a.findDepPackage(depPath, a.packageVer)
-		
+		depPackPath, err := a.findDepPackage(depPath, dependency[0].Ver)
+		if err != nil {
+			return err
+		}
+
+		depPackages = append(depPackages, depPackPath)
+
 	}
 
 	return nil
