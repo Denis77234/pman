@@ -2,11 +2,6 @@ package reqstruct
 
 import "fmt"
 
-type Packet struct {
-	Name string `json:"name"`
-	Ver  string `json:"ver"`
-}
-
 type Request struct {
 	Name    string   `json:"name"`
 	Ver     string   `json:"ver"`

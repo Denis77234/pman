@@ -14,7 +14,7 @@ import (
 
 type Packager struct {
 	req         reqstruct.Request
-	packagesDir string
+	packagesDir string //path to directory where generated packages are stored
 }
 
 func New(request reqstruct.Request, packagesDir string) Packager {
@@ -24,11 +24,13 @@ func New(request reqstruct.Request, packagesDir string) Packager {
 	return arch
 }
 
+// returns path for package directory
 func (p Packager) pckDir() string {
 	dir := fmt.Sprintf("%v/%v", p.packagesDir, p.req.Name)
 	return dir
 }
 
+// returns path for archive file
 func (p Packager) zipPath() string {
 	zipPath := fmt.Sprintf("%v/%v", p.pckDir(), p.req.ArchiveName("tar"))
 	return zipPath
@@ -57,6 +59,8 @@ func (p Packager) makeDependencyFile() error {
 		return err
 	}
 
+	defer file.Close()
+
 	enc := json.NewEncoder(file)
 
 	enc.SetEscapeHTML(false)
@@ -65,8 +69,6 @@ func (p Packager) makeDependencyFile() error {
 	if err != nil {
 		return err
 	}
-
-	defer file.Close()
 
 	return nil
 }
@@ -114,16 +116,16 @@ func (p Packager) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) erro
 	return nil
 }
 
-func (p Packager) Archive() error {
+func (p Packager) Package() (packageDir, packageVer string, err error) {
 
-	err := p.makeDirIfNotExist()
+	err = p.makeDirIfNotExist()
 	if err != nil {
-		return err
+		return "", "", err
 	}
 
 	arch, err := os.Create(p.zipPath())
 	if err != nil {
-		fmt.Println(err)
+		return "", "", err
 	}
 
 	defer arch.Close()
@@ -135,11 +137,14 @@ func (p Packager) Archive() error {
 	for _, target := range p.req.Targets {
 		err := p.archiveMask(target, zipWriter)
 		if err != nil {
-			return err
+			return "", "", err
 		}
 	}
 
-	p.makeDependencyFile()
+	err = p.makeDependencyFile()
+	if err != nil {
+		return "", "", err
+	}
 
-	return nil
+	return p.pckDir(), p.req.Ver, nil
 }

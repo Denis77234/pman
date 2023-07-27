@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"packetManager/internal/Request"
+	"packetManager/internal/archiver"
 	"packetManager/internal/packager"
 )
 
@@ -29,9 +30,14 @@ func main() {
 		fmt.Println(jserr)
 	}
 
-	arch := packager.New(request, "../../packages")
-	err = arch.Archive()
+	pack := packager.New(request, "../../packages")
+	dir, ver, err := pack.Package()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	arch := archiver.New("../../packages", dir, ver)
+
+	fmt.Println(arch.FindDependencies())
+
 }
