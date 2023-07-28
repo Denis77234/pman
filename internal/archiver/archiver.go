@@ -1,6 +1,7 @@
 package archiver
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,19 +15,23 @@ import (
 )
 
 type Archiver struct {
-	packagesDir string //path to directory where generated packages are stored
-	packageDir  string //path to directory where package to be archived is stored
-	packageVer  string
+	packageDir string //path to directory where package to be archived is stored
+	packageVer string
 }
 
-func New(pDir, dir, ver string) Archiver {
-	a := Archiver{packagesDir: pDir, packageDir: dir, packageVer: ver}
+func New(dir, ver string) Archiver {
+	a := Archiver{packageDir: dir, packageVer: ver}
 	return a
+}
+
+func (a Archiver) pckg() string {
+	pckg := a.packageDir + "/" + a.packageVer + ".tar"
+	return pckg
 }
 
 func (a Archiver) dependencyPath(dependency string) string {
 
-	depPath := fmt.Sprintf("%v/%v", a.packagesDir, dependency)
+	depPath := fmt.Sprintf("%v/%v", filepath.Dir(a.packageDir), dependency)
 
 	return depPath
 
@@ -40,7 +45,7 @@ func (a Archiver) dependencyFilePath() string {
 
 }
 
-func (a Archiver) isDependencyExist(path string) bool {
+func (a Archiver) isDirExist(path string) bool {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return false
 	}
@@ -110,45 +115,116 @@ func (a Archiver) findDepPackage(path, ver string) (string, error) {
 
 	}
 
-	fmt.Println(validVersionFile)
-
 	return validVersionFile, nil
 }
 
-func (a Archiver) FindDependencies() error {
+func (a Archiver) findDependencies() ([]string, error) {
 
 	depFile, err := os.Open(a.dependencyFilePath())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	byteValue, err := io.ReadAll(depFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	dependency := []reqstruct.Packet{}
+	dependency := make([]reqstruct.Packet, 0, 5)
 
 	err = json.Unmarshal(byteValue, &dependency)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	fmt.Println(dependency)
 
 	depPackages := make([]string, 0, 10)
 
 	for _, dep := range dependency {
 		depPath := a.dependencyPath(dep.Name)
 
-		if !a.isDependencyExist(depPath) {
-			return errors.New("Dependecy not found")
+		if !a.isDirExist(depPath) {
+			return nil, errors.New("dependency not found")
 		}
 
 		depPackPath, err := a.findDepPackage(depPath, dependency[0].Ver)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		depPackages = append(depPackages, depPackPath)
 
+	}
+
+	return depPackages, nil
+}
+
+func (a Archiver) Archive() error {
+	dependencies, err := a.findDependencies()
+	if err != nil {
+		return err
+	}
+
+	archive, err := os.Create(filepath.Base(a.packageDir) + ".tar")
+	if err != nil {
+		return err
+	}
+
+	defer archive.Close()
+
+	zipWriter := zip.NewWriter(archive)
+
+	defer zipWriter.Close()
+
+	for _, dep := range dependencies {
+		err = a.copyArchive(dep, zipWriter)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = a.copyArchive(a.pckg(), zipWriter)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a Archiver) copyArchive(from string, to *zip.Writer) error {
+
+	archive, err := zip.OpenReader(from)
+	if err != nil {
+		return err
+	}
+
+	defer archive.Close()
+
+	for _, file := range archive.File {
+
+		packetName := filepath.Base(filepath.Dir(from))
+		version := a.version(from)
+
+		dir := packetName + "/" + version + "/"
+
+		w, err := to.Create(dir + file.Name)
+		if err != nil {
+			return err
+		}
+
+		reader, err := file.Open()
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(w, reader)
+		if err != nil {
+			return err
+		}
+		err = reader.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -6,6 +6,7 @@
     { "path": "/home/denis/GolandProjects/packetManager/test/files1/*", "exclude": "*.tmp" }
   ],
   "packets": [
-    { "name": "packet-3", "ver": "<= 2.0" }
+    { "name": "packet-3", "ver": "<= 2.0" },
+    { "name": "packet-4", "ver": "1.0" }
   ]
 }

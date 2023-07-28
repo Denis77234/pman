@@ -116,7 +116,7 @@ func (p Packager) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) erro
 	return nil
 }
 
-func (p Packager) Package() (packageDir, packageVer string, err error) {
+func (p Packager) Package() (packageDir, name string, err error) {
 
 	err = p.makeDirIfNotExist()
 	if err != nil {

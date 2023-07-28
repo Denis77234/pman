@@ -36,8 +36,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	arch := archiver.New("../../packages", dir, ver)
-
-	fmt.Println(arch.FindDependencies())
+	arch := archiver.New(dir, ver)
+	err = arch.Archive()
+	if err != nil {
+		fmt.Println(err)
+	}
 
 }
