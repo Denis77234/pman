@@ -1,6 +1,7 @@
 package sshclient
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Masterminds/semver"
@@ -51,6 +52,13 @@ func (c *Client) makeDirIfNotExist(path string) error {
 		}
 	}
 	return nil
+}
+
+func (c *Client) isFileExist(path string) bool {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return true
 }
 
 func (c *Client) version(path string) string {
@@ -248,8 +256,12 @@ func (c Client) findZip(dir, ver string) (string, error) {
 	var validVersionFile string
 
 	for _, file := range files {
+
 		valid, err := c.checkVersion(file.Name(), ver)
 		if err != nil {
+			if strings.Contains(fmt.Sprint(err), "Invalid Semantic Version") {
+				continue
+			}
 			return "", err
 		}
 
@@ -311,12 +323,40 @@ func (c Client) DownloadPack(update reqstruct.Update, soursePath string) error {
 
 	for _, file := range update.Updates {
 		path := soursePath + "/" + file.Name
-		fp, err := c.findZip(path, file.Version)
+		fp, err := c.findZip(path, file.Ver)
 		if err != nil {
 			return err
 		}
 
 		c.downloadZip(fp)
+
+		if c.isFileExist(path + "/" + "dependency.json") {
+
+			jsonValue, err := os.Open(path + "/" + "dependency.json")
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			byteValue, err := io.ReadAll(jsonValue)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			request := reqstruct.Update{}
+
+			jserr := json.Unmarshal(byteValue, &request)
+			if jserr != nil {
+				fmt.Println(jserr)
+			}
+
+			source := "/home/denis/sourceDir"
+			err = c.DownloadPack(request, source)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+		}
 	}
+
 	return nil
 }

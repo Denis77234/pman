@@ -1,8 +1,7 @@
 package reqstruct
 
 import (
-	"regexp"
-	"strings"
+	"encoding/json"
 )
 
 type Packet struct {
@@ -10,14 +9,26 @@ type Packet struct {
 	Ver  string `json:"ver"`
 }
 
-func (p Packet) VerOperator() string {
-	operator := strings.Replace(p.Ver, p.VerNum(), "", -1)
-	return operator
-}
+func (p *Packet) UnmarshalJSON(data []byte) error {
+	var Obj struct {
+		Name    string `json:"name"`
+		Version string `json:"ver"`
+	}
 
-func (p Packet) VerNum() string {
-	oper, _ := regexp.Compile(`[<>=]*`)
-	num := oper.ReplaceAllString(p.Ver, "")
+	err := json.Unmarshal(data, &Obj)
+	if err == nil {
+		p.Name = Obj.Name
+		p.Ver = Obj.Version
+		return nil
+	}
 
-	return num
+	var Name string
+
+	err1 := json.Unmarshal(data, &Name)
+	if err1 != nil {
+		return err1
+	}
+	p.Name = Name
+	p.Ver = ""
+	return nil
 }
