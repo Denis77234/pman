@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -50,7 +52,7 @@ func (c *Client) Info(filePath string) (os.FileInfo, error) {
 	return info, nil
 }
 
-func (c *Client) Close() {
+func (c *Client) close() {
 	if c.sftpClient != nil {
 		c.sftpClient.Close()
 	}
@@ -100,5 +102,79 @@ func (c *Client) connect() error {
 	}
 	c.sftpClient = sftpClient
 
+	return nil
+}
+
+func (c *Client) upload(source io.Reader, destination io.Writer, size int) error {
+	if err := c.connect(); err != nil {
+		return fmt.Errorf("connect: %w", err)
+	}
+
+	chunk := make([]byte, size)
+
+	for {
+		num, err := source.Read(chunk)
+		if err == io.EOF {
+			tot, err := destination.Write(chunk[:num])
+			if err != nil {
+				return err
+			}
+
+			if tot != len(chunk[:num]) {
+				return fmt.Errorf("failed to write stream")
+			}
+
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		tot, err := destination.Write(chunk[:num])
+		if err != nil {
+			return err
+		}
+
+		if tot != len(chunk[:num]) {
+			return fmt.Errorf("failed to write stream")
+		}
+	}
+}
+
+func (c *Client) create(filePath string) (io.ReadWriteCloser, error) {
+	if err := c.connect(); err != nil {
+		return nil, fmt.Errorf("connect: %w", err)
+	}
+
+	return c.sftpClient.Create(filePath)
+}
+
+func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
+
+	dirPath := destDir + packetName
+
+	err := c.sftpClient.Mkdir(dirPath)
+	if err != nil {
+		return err
+	}
+
+	filePath := dirPath + "/" + filepath.Base(sourcePath)
+	fmt.Println(filePath)
+
+	dest, err := c.create(filePath)
+	if err != nil {
+		return err
+	}
+
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	err = c.upload(source, dest, 10)
+	if err != nil {
+		return err
+	}
 	return nil
 }

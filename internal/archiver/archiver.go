@@ -33,7 +33,7 @@ func (a Archiver) Archive() (archivePath string, err error) {
 		return "", err
 	}
 
-	archivePath = a.archiveDir + "/" + filepath.Base(a.packageDir) + ".zip"
+	archivePath = a.archiveDir + "/" + a.packageVer + ".zip"
 
 	archive, err := os.Create(archivePath)
 	if err != nil {

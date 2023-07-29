@@ -26,16 +26,16 @@ func New(request reqstruct.Request, packagesDir string) Packager {
 	return arch
 }
 
-func (p Packager) Package() (packageDir, packageName string, err error) {
+func (p Packager) Package() (packageDir string, err error) {
 
 	err = p.makeDirIfNotExist()
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	arch, err := os.Create(p.zipPath())
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	defer arch.Close()
@@ -47,16 +47,16 @@ func (p Packager) Package() (packageDir, packageName string, err error) {
 	for _, target := range p.req.Targets {
 		err := p.archiveMask(target, zipWriter)
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
 	}
 
 	err = p.makeDependencyFile()
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	return p.pckDir(), p.req.Ver, nil
+	return p.pckDir(), nil
 }
 
 //------------------------------------------------------

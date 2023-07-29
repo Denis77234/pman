@@ -33,12 +33,12 @@ func main() {
 	}
 
 	pack := packager.New(request, "/home/denis/GolandProjects/packetManager/packages")
-	dir, ver, err := pack.Package()
+	dir, err := pack.Package()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	arch := archiver.New(dir, ver, "/home/denis/GolandProjects/packetManager/cmd/main/packet-1.zip")
+	arch := archiver.New(dir, request.Ver, "/home/denis/GolandProjects/packetManager/cmd/main/packet-1.zip")
 	archivePath, err := arch.Archive()
 	if err != nil {
 		fmt.Println(err)
@@ -56,10 +56,11 @@ func main() {
 		fmt.Println(err)
 	}
 
-	inf, err := cl.Info(archivePath)
+	sendPath := "/home/denis/dir/"
+
+	err = cl.SendPack(archivePath, sendPath, request.Name)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	fmt.Println(inf.Name())
 }
