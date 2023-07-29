@@ -23,7 +23,7 @@ type Archiver struct {
 //-------------------------------------
 
 func New(dir, ver, archDir string) Archiver {
-	a := Archiver{packageDir: dir, packageVer: ver, archiveDir: "/home/denis/GolandProjects/packetManager/cmd/main"}
+	a := Archiver{packageDir: dir, packageVer: ver, archiveDir: archDir}
 	return a
 }
 

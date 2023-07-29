@@ -1,13 +1,17 @@
 package sshclient
 
 import (
+	"errors"
 	"fmt"
+	"github.com/Masterminds/semver"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"net"
 	"os"
+	reqstruct "packetManager/internal/Request"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -39,7 +43,48 @@ func New(config Cfg) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) Info(filePath string) (os.FileInfo, error) {
+func (c *Client) makeDirIfNotExist(path string) error {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		err = os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) version(path string) string {
+
+	str := strings.Replace(filepath.Base(path), ".zip", "", -1)
+
+	return str
+}
+
+func (c *Client) checkVersion(file, lookingForVer string) (bool, error) {
+
+	factVer := c.version(file)
+
+	con, err := semver.NewConstraint(lookingForVer)
+	if err != nil {
+
+		return false, err
+	}
+
+	v, err := semver.NewVersion(factVer)
+	if err != nil {
+		return false, err
+	}
+
+	b, err1 := con.Validate(v)
+	if err != nil {
+		return false, err1[0]
+	}
+
+	return b, nil
+
+}
+
+func (c *Client) info(filePath string) (os.FileInfo, error) {
 	if err := c.connect(); err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
@@ -172,9 +217,106 @@ func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
 		return err
 	}
 
+	defer source.Close()
+
 	err = c.upload(source, dest, 10)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func (c *Client) download(filePath string) (io.ReadCloser, error) {
+	if err := c.connect(); err != nil {
+		return nil, fmt.Errorf("connect: %w", err)
+	}
+
+	return c.sftpClient.Open(filePath)
+}
+
+func (c Client) findZip(dir, ver string) (string, error) {
+
+	if ver == "" {
+		ver = ">=0.0.1"
+	}
+
+	files, err := c.sftpClient.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+
+	var validVersionFile string
+
+	for _, file := range files {
+		valid, err := c.checkVersion(file.Name(), ver)
+		if err != nil {
+			return "", err
+		}
+
+		if valid {
+			if validVersionFile == "" {
+				validVersionFile = file.Name()
+			} else {
+				validVer := c.version(validVersionFile)
+				currentFileVer := c.version(file.Name())
+				compareStr := ">" + validVer
+
+				bigger, _ := c.checkVersion(currentFileVer, compareStr)
+				if bigger {
+					validVersionFile = file.Name()
+				}
+
+			}
+		}
+	}
+
+	filePath := dir + "/" + validVersionFile
+	return filePath, nil
+}
+
+func (c Client) downloadZip(file string) error {
+
+	dirname := filepath.Base(filepath.Dir(file))
+
+	c.makeDirIfNotExist(dirname)
+
+	f, err := os.Create(dirname + "/" + filepath.Base(file))
+	if err != nil {
+		return err
+	}
+
+	d, err := c.download(file)
+	if err != nil {
+
+		return err
+	}
+
+	defer d.Close()
+
+	bytes, err := io.ReadAll(d)
+	if err != nil {
+
+		return err
+	}
+
+	_, err = f.Write(bytes)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c Client) DownloadPack(update reqstruct.Update, soursePath string) error {
+
+	for _, file := range update.Updates {
+		path := soursePath + "/" + file.Name
+		fp, err := c.findZip(path, file.Version)
+		if err != nil {
+			return err
+		}
+
+		c.downloadZip(fp)
 	}
 	return nil
 }
