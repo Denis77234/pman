@@ -17,15 +17,54 @@ import (
 type Archiver struct {
 	packageDir string //path to directory where package to be archived is stored
 	packageVer string
+	archiveDir string // path to directory where the package should be archived
 }
 
-func New(dir, ver string) Archiver {
-	a := Archiver{packageDir: dir, packageVer: ver}
+//-------------------------------------
+
+func New(dir, ver, archDir string) Archiver {
+	a := Archiver{packageDir: dir, packageVer: ver, archiveDir: "/home/denis/GolandProjects/packetManager/cmd/main"}
 	return a
 }
 
+func (a Archiver) Archive() (archivePath string, err error) {
+	dependencies, err := a.findDependencies()
+	if err != nil {
+		return "", err
+	}
+
+	archivePath = a.archiveDir + "/" + filepath.Base(a.packageDir) + ".zip"
+
+	archive, err := os.Create(archivePath)
+	if err != nil {
+		return "", err
+	}
+
+	defer archive.Close()
+
+	zipWriter := zip.NewWriter(archive)
+
+	defer zipWriter.Close()
+
+	for _, dep := range dependencies {
+		err = a.copyArchive(dep, zipWriter)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	err = a.copyArchive(a.pckg(), zipWriter)
+	if err != nil {
+		return "", err
+	}
+
+	return archivePath, nil
+}
+
+//-------------------------------------
+
 func (a Archiver) pckg() string {
-	pckg := a.packageDir + "/" + a.packageVer + ".tar"
+	pckg := a.packageDir + "/" + a.packageVer + ".zip"
 	return pckg
 }
 
@@ -54,7 +93,7 @@ func (a Archiver) isDirExist(path string) bool {
 
 func (a Archiver) version(path string) string {
 
-	str := strings.Replace(filepath.Base(path), ".tar", "", -1)
+	str := strings.Replace(filepath.Base(path), ".zip", "", -1)
 
 	return str
 }
@@ -85,7 +124,7 @@ func (a Archiver) checkVersion(file, lookingForVer string) (bool, error) {
 
 func (a Archiver) findDepPackage(path, ver string) (string, error) {
 
-	files, err := filepath.Glob(path + "/*.tar")
+	files, err := filepath.Glob(path + "/*.zip")
 	if err != nil {
 		return "", err
 	}
@@ -136,8 +175,6 @@ func (a Archiver) findDependencies() ([]string, error) {
 		return nil, err
 	}
 
-	fmt.Println(dependency)
-
 	depPackages := make([]string, 0, 10)
 
 	for _, dep := range dependency {
@@ -157,38 +194,6 @@ func (a Archiver) findDependencies() ([]string, error) {
 	}
 
 	return depPackages, nil
-}
-
-func (a Archiver) Archive() error {
-	dependencies, err := a.findDependencies()
-	if err != nil {
-		return err
-	}
-
-	archive, err := os.Create(filepath.Base(a.packageDir) + ".tar")
-	if err != nil {
-		return err
-	}
-
-	defer archive.Close()
-
-	zipWriter := zip.NewWriter(archive)
-
-	defer zipWriter.Close()
-
-	for _, dep := range dependencies {
-		err = a.copyArchive(dep, zipWriter)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = a.copyArchive(a.pckg(), zipWriter)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (a Archiver) copyArchive(from string, to *zip.Writer) error {

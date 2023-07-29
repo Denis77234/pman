@@ -17,12 +17,49 @@ type Packager struct {
 	packagesDir string //path to directory where generated packages are stored
 }
 
+//----------------------------------------------------
+
 func New(request reqstruct.Request, packagesDir string) Packager {
 
 	arch := Packager{req: request, packagesDir: packagesDir}
 
 	return arch
 }
+
+func (p Packager) Package() (packageDir, packageName string, err error) {
+
+	err = p.makeDirIfNotExist()
+	if err != nil {
+		return "", "", err
+	}
+
+	arch, err := os.Create(p.zipPath())
+	if err != nil {
+		return "", "", err
+	}
+
+	defer arch.Close()
+
+	zipWriter := zip.NewWriter(arch)
+
+	defer zipWriter.Close()
+
+	for _, target := range p.req.Targets {
+		err := p.archiveMask(target, zipWriter)
+		if err != nil {
+			return "", "", err
+		}
+	}
+
+	err = p.makeDependencyFile()
+	if err != nil {
+		return "", "", err
+	}
+
+	return p.pckDir(), p.req.Ver, nil
+}
+
+//------------------------------------------------------
 
 // returns path for package directory
 func (p Packager) pckDir() string {
@@ -114,37 +151,4 @@ func (p Packager) archiveMask(targ reqstruct.Target, zipWriter *zip.Writer) erro
 		f.Close()
 	}
 	return nil
-}
-
-func (p Packager) Package() (packageDir, name string, err error) {
-
-	err = p.makeDirIfNotExist()
-	if err != nil {
-		return "", "", err
-	}
-
-	arch, err := os.Create(p.zipPath())
-	if err != nil {
-		return "", "", err
-	}
-
-	defer arch.Close()
-
-	zipWriter := zip.NewWriter(arch)
-
-	defer zipWriter.Close()
-
-	for _, target := range p.req.Targets {
-		err := p.archiveMask(target, zipWriter)
-		if err != nil {
-			return "", "", err
-		}
-	}
-
-	err = p.makeDependencyFile()
-	if err != nil {
-		return "", "", err
-	}
-
-	return p.pckDir(), p.req.Ver, nil
 }
