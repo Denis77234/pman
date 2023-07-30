@@ -5,35 +5,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Masterminds/semver"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
-
 	reqstruct "packetManager/internal/Request"
+	"packetManager/internal/fileHelper"
+	"path/filepath"
 )
 
 type Archiver struct {
-	packageDir string //path to directory where package to be archived is stored
-	packageVer string
-	archiveDir string // path to directory where the package should be archived
+	fileHelper.Helper
 }
 
 //-------------------------------------
 
-func New(dir, ver, archDir string) Archiver {
-	a := Archiver{packageDir: dir, packageVer: ver, archiveDir: archDir}
+func New() Archiver {
+	a := Archiver{}
 	return a
 }
 
-func (a Archiver) Archive() (archivePath string, err error) {
-	dependencies, err := a.findDependencies()
+func (a Archiver) Archive(packageDir, packageVer, archiveTo string) (archivePath string, err error) {
+	dependencies, err := a.findDependencies(packageDir)
 	if err != nil {
 		return "", err
 	}
 
-	archivePath = a.archiveDir + "/" + a.packageVer + ".zip"
+	archivePath = archiveTo + "/" + packageVer + ".zip"
 
 	archive, err := os.Create(archivePath)
 	if err != nil {
@@ -53,7 +49,7 @@ func (a Archiver) Archive() (archivePath string, err error) {
 		}
 	}
 
-	err = a.copyArchive(a.pckg(), zipWriter)
+	err = a.copyArchive(a.pckg(packageDir, packageVer), zipWriter)
 	if err != nil {
 		return "", err
 	}
@@ -63,62 +59,24 @@ func (a Archiver) Archive() (archivePath string, err error) {
 
 //-------------------------------------
 
-func (a Archiver) pckg() string {
-	pckg := a.packageDir + "/" + a.packageVer + ".zip"
+func (a Archiver) pckg(packageDir, packageVer string) string {
+	pckg := packageDir + "/" + packageVer + ".zip"
 	return pckg
 }
 
-func (a Archiver) dependencyPath(dependency string) string {
+func (a Archiver) dependencyPath(dependency string, packageDir string) string {
 
-	depPath := fmt.Sprintf("%v/%v", filepath.Dir(a.packageDir), dependency)
+	depPath := fmt.Sprintf("%v/%v", filepath.Dir(packageDir), dependency)
 
 	return depPath
 
 }
 
-func (a Archiver) dependencyFilePath() string {
+func (a Archiver) dependencyFilePath(packageDir string) string {
 	fileName := "dependency.json"
-	depFilePath := fmt.Sprintf("%v/%v", a.packageDir, fileName)
+	depFilePath := fmt.Sprintf("%v/%v", packageDir, fileName)
 
 	return depFilePath
-
-}
-
-func (a Archiver) isDirExist(path string) bool {
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-	return true
-}
-
-func (a Archiver) version(path string) string {
-
-	str := strings.Replace(filepath.Base(path), ".zip", "", -1)
-
-	return str
-}
-
-func (a Archiver) checkVersion(file, lookingForVer string) (bool, error) {
-
-	factVer := a.version(file)
-
-	c, err := semver.NewConstraint(lookingForVer)
-	if err != nil {
-
-		return false, err
-	}
-
-	v, err := semver.NewVersion(factVer)
-	if err != nil {
-		return false, err
-	}
-
-	b, err1 := c.Validate(v)
-	if err != nil {
-		return false, err1[0]
-	}
-
-	return b, nil
 
 }
 
@@ -132,7 +90,7 @@ func (a Archiver) findDepPackage(path, ver string) (string, error) {
 	var validVersionFile string
 
 	for _, file := range files {
-		valid, err := a.checkVersion(file, ver)
+		valid, err := a.CheckVersion(file, ver)
 		if err != nil {
 			return "", err
 		}
@@ -140,11 +98,11 @@ func (a Archiver) findDepPackage(path, ver string) (string, error) {
 			if validVersionFile == "" {
 				validVersionFile = file
 			} else {
-				validVer := a.version(validVersionFile)
-				currentFileVer := a.version(file)
+				validVer := a.Version(validVersionFile)
+				currentFileVer := a.Version(file)
 				compareStr := ">" + validVer
 
-				bigger, _ := a.checkVersion(currentFileVer, compareStr)
+				bigger, _ := a.CheckVersion(currentFileVer, compareStr)
 				if bigger {
 					validVersionFile = file
 				}
@@ -157,9 +115,9 @@ func (a Archiver) findDepPackage(path, ver string) (string, error) {
 	return validVersionFile, nil
 }
 
-func (a Archiver) findDependencies() ([]string, error) {
+func (a Archiver) findDependencies(packageDir string) ([]string, error) {
 
-	depFile, err := os.Open(a.dependencyFilePath())
+	depFile, err := os.Open(a.dependencyFilePath(packageDir))
 	if err != nil {
 		return nil, err
 	}
@@ -178,9 +136,9 @@ func (a Archiver) findDependencies() ([]string, error) {
 	depPackages := make([]string, 0, 10)
 
 	for _, dep := range dependency {
-		depPath := a.dependencyPath(dep.Name)
+		depPath := a.dependencyPath(dep.Name, packageDir)
 
-		if !a.isDirExist(depPath) {
+		if !a.IsFileExist(depPath) {
 			return nil, errors.New("dependency not found")
 		}
 
@@ -208,7 +166,7 @@ func (a Archiver) copyArchive(from string, to *zip.Writer) error {
 	for _, file := range archive.File {
 
 		packetName := filepath.Base(filepath.Dir(from))
-		version := a.version(from)
+		version := a.Version(from)
 
 		dir := packetName + "/" + version + "/"
 

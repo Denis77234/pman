@@ -6,11 +6,29 @@ import (
 	"io"
 	"os"
 	reqstruct "packetManager/internal/Request"
+	"packetManager/internal/archiver"
+	"packetManager/internal/packager"
+	"packetManager/internal/packetManager"
 	"packetManager/internal/sshclient"
 	"time"
 )
 
+const PACKAGESDIR = "/home/denis/GolandProjects/packetManager/packages"
+const ARCHIVETO = "/home/denis/GolandProjects/packetManager/cmd"
+const UPLOADTO = "/home/denis/dir/"
+
+const DOWNLOADFROM = "/home/denis/sourceDir"
+const DOWNLOADTO = "/home/denis/GolandProjects/packetManager/cmd/main"
+
 func main() {
+
+	cfgPM := packetManager.Config{
+		DownloadFrom: DOWNLOADFROM,
+		DownloadTo:   DOWNLOADTO,
+		PackagesDir:  PACKAGESDIR,
+		ArchiveTo:    ARCHIVETO,
+		UploadTo:     UPLOADTO,
+	}
 
 	//jsonValue, err := os.Open("../../test/test.json")
 	//if err != nil {
@@ -28,18 +46,10 @@ func main() {
 	//if jserr != nil {
 	//	fmt.Println(jserr)
 	//}
-	//
-	//pack := packager.New(request, "/home/denis/GolandProjects/packetManager/packages")
-	//dir, err := pack.Package()
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//
-	//arch := archiver.New(dir, request.Ver, "/home/denis/GolandProjects/packetManager/cmd")
-	//_, err = arch.Archive()
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
+
+	pack := packager.New()
+
+	arch := archiver.New()
 
 	cfg := sshclient.Cfg{
 		Username: "denis",
@@ -53,12 +63,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	//sendPath := "/home/denis/dir/"
-
-	//err = cl.SendPack(archivePath, sendPath, request.Name)
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
+	pm := packetManager.New(cfgPM, arch, pack, cl)
 
 	jsonValue, err := os.Open("../../test/testdownload.json")
 	if err != nil {
@@ -77,9 +82,9 @@ func main() {
 		fmt.Println(jserr)
 	}
 
-	source := "/home/denis/sourceDir"
-	err = cl.DownloadPack(request, source)
+	err = pm.DownloadPack(request)
 	if err != nil {
 		fmt.Println(err)
 	}
+
 }

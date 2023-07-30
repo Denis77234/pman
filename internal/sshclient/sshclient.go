@@ -2,15 +2,16 @@ package sshclient
 
 import (
 	"encoding/json"
-	"errors"
+
 	"fmt"
-	"github.com/Masterminds/semver"
+
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"net"
 	"os"
 	reqstruct "packetManager/internal/Request"
+	"packetManager/internal/fileHelper"
 	"path/filepath"
 	"strings"
 	"time"
@@ -26,11 +27,14 @@ type Cfg struct {
 }
 
 type Client struct {
-	config Cfg
-
+	config     Cfg
 	sshClient  *ssh.Client
 	sftpClient *sftp.Client
+
+	fileHelper.Helper
 }
+
+//---------------------------------------------------
 
 func New(config Cfg) (*Client, error) {
 	c := &Client{
@@ -44,68 +48,7 @@ func New(config Cfg) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) makeDirIfNotExist(path string) error {
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		err = os.Mkdir(path, os.ModePerm)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *Client) isFileExist(path string) bool {
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-	return true
-}
-
-func (c *Client) version(path string) string {
-
-	str := strings.Replace(filepath.Base(path), ".zip", "", -1)
-
-	return str
-}
-
-func (c *Client) checkVersion(file, lookingForVer string) (bool, error) {
-
-	factVer := c.version(file)
-
-	con, err := semver.NewConstraint(lookingForVer)
-	if err != nil {
-
-		return false, err
-	}
-
-	v, err := semver.NewVersion(factVer)
-	if err != nil {
-		return false, err
-	}
-
-	b, err1 := con.Validate(v)
-	if err != nil {
-		return false, err1[0]
-	}
-
-	return b, nil
-
-}
-
-func (c *Client) info(filePath string) (os.FileInfo, error) {
-	if err := c.connect(); err != nil {
-		return nil, fmt.Errorf("connect: %w", err)
-	}
-
-	info, err := c.sftpClient.Lstat(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("file stats: %w", err)
-	}
-
-	return info, nil
-}
-
-func (c *Client) close() {
+func (c *Client) Close() {
 	if c.sftpClient != nil {
 		c.sftpClient.Close()
 	}
@@ -113,6 +56,88 @@ func (c *Client) close() {
 		c.sshClient.Close()
 	}
 }
+
+func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
+	if err := c.connect(); err != nil {
+		return fmt.Errorf("Sendpack: %w", err)
+	}
+
+	defer c.Close()
+
+	dirPath := destDir + packetName
+
+	err := c.sftpClient.Mkdir(dirPath)
+	if err != nil {
+		return err
+	}
+
+	filePath := dirPath + "/" + filepath.Base(sourcePath)
+	fmt.Println(filePath)
+
+	dest, err := c.create(filePath)
+	if err != nil {
+		return err
+	}
+
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	defer source.Close()
+
+	err = c.upload(source, dest, 10)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c Client) DownloadPack(update reqstruct.Update, sourcePath, downloadTo string) error {
+	if err := c.connect(); err != nil {
+		return fmt.Errorf("DownloadPack: %w", err)
+	}
+
+	for _, file := range update.Updates {
+		path := sourcePath + "/" + file.Name
+		fp, err := c.findZip(path, file.Ver)
+		if err != nil {
+			return err
+		}
+
+		c.downloadZip(fp, downloadTo)
+
+		if c.IsFileExist(path + "/" + "dependency.json") {
+
+			jsonValue, err := os.Open(path + "/" + "dependency.json")
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			byteValue, err := io.ReadAll(jsonValue)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			request := reqstruct.Update{}
+
+			jserr := json.Unmarshal(byteValue, &request)
+			if jserr != nil {
+				fmt.Println(jserr)
+			}
+
+			err = c.DownloadPack(request, sourcePath, downloadTo)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+		}
+	}
+
+	return nil
+}
+
+//-------------------------------------------------------------------
 
 func (c *Client) connect() error {
 	if c.sshClient != nil {
@@ -203,37 +228,6 @@ func (c *Client) create(filePath string) (io.ReadWriteCloser, error) {
 	return c.sftpClient.Create(filePath)
 }
 
-func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
-
-	dirPath := destDir + packetName
-
-	err := c.sftpClient.Mkdir(dirPath)
-	if err != nil {
-		return err
-	}
-
-	filePath := dirPath + "/" + filepath.Base(sourcePath)
-	fmt.Println(filePath)
-
-	dest, err := c.create(filePath)
-	if err != nil {
-		return err
-	}
-
-	source, err := os.Open(sourcePath)
-	if err != nil {
-		return err
-	}
-
-	defer source.Close()
-
-	err = c.upload(source, dest, 10)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (c *Client) download(filePath string) (io.ReadCloser, error) {
 	if err := c.connect(); err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
@@ -257,7 +251,7 @@ func (c Client) findZip(dir, ver string) (string, error) {
 
 	for _, file := range files {
 
-		valid, err := c.checkVersion(file.Name(), ver)
+		valid, err := c.CheckVersion(file.Name(), ver)
 		if err != nil {
 			if strings.Contains(fmt.Sprint(err), "Invalid Semantic Version") {
 				continue
@@ -269,11 +263,11 @@ func (c Client) findZip(dir, ver string) (string, error) {
 			if validVersionFile == "" {
 				validVersionFile = file.Name()
 			} else {
-				validVer := c.version(validVersionFile)
-				currentFileVer := c.version(file.Name())
+				validVer := c.Version(validVersionFile)
+				currentFileVer := c.Version(file.Name())
 				compareStr := ">" + validVer
 
-				bigger, _ := c.checkVersion(currentFileVer, compareStr)
+				bigger, _ := c.CheckVersion(currentFileVer, compareStr)
 				if bigger {
 					validVersionFile = file.Name()
 				}
@@ -286,11 +280,11 @@ func (c Client) findZip(dir, ver string) (string, error) {
 	return filePath, nil
 }
 
-func (c Client) downloadZip(file string) error {
+func (c Client) downloadZip(file, downloadTo string) error {
 
-	dirname := filepath.Base(filepath.Dir(file))
+	dirname := downloadTo + "/" + filepath.Base(filepath.Dir(file))
 
-	c.makeDirIfNotExist(dirname)
+	c.MakeDirIfNotExist(dirname)
 
 	f, err := os.Create(dirname + "/" + filepath.Base(file))
 	if err != nil {
@@ -314,48 +308,6 @@ func (c Client) downloadZip(file string) error {
 	_, err = f.Write(bytes)
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func (c Client) DownloadPack(update reqstruct.Update, soursePath string) error {
-
-	for _, file := range update.Updates {
-		path := soursePath + "/" + file.Name
-		fp, err := c.findZip(path, file.Ver)
-		if err != nil {
-			return err
-		}
-
-		c.downloadZip(fp)
-
-		if c.isFileExist(path + "/" + "dependency.json") {
-
-			jsonValue, err := os.Open(path + "/" + "dependency.json")
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			byteValue, err := io.ReadAll(jsonValue)
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			request := reqstruct.Update{}
-
-			jserr := json.Unmarshal(byteValue, &request)
-			if jserr != nil {
-				fmt.Println(jserr)
-			}
-
-			source := "/home/denis/sourceDir"
-			err = c.DownloadPack(request, source)
-			if err != nil {
-				fmt.Println(err)
-			}
-
-		}
 	}
 
 	return nil

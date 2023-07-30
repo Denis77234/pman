@@ -3,39 +3,43 @@ package packager
 import (
 	"archive/zip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
+	"packetManager/internal/fileHelper"
 	"path/filepath"
 
 	reqstruct "packetManager/internal/Request"
 )
 
 type Packager struct {
-	req         reqstruct.Request
-	packagesDir string //path to directory where generated packages are stored
+	//req         reqstruct.Request
+	//packagesDir string //path to directory where generated packages are stored
+
+	fileHelper.Helper
 }
 
 //----------------------------------------------------
 
-func New(request reqstruct.Request, packagesDir string) Packager {
+func New() Packager {
 
-	arch := Packager{req: request, packagesDir: packagesDir}
+	arch := Packager{}
 
 	return arch
 }
 
-func (p Packager) Package() (packageDir string, err error) {
+func (p Packager) Package(req reqstruct.Request, packagesDir string) (pckDir, pckVer string, err error) {
 
-	err = p.makeDirIfNotExist()
+	pckDir = p.pckDir(req.Name, packagesDir)
+
+	err = p.MakeDirIfNotExist(pckDir)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	arch, err := os.Create(p.zipPath())
+	arch, err := os.Create(p.zipPath(req, packagesDir))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	defer arch.Close()
@@ -44,52 +48,42 @@ func (p Packager) Package() (packageDir string, err error) {
 
 	defer zipWriter.Close()
 
-	for _, target := range p.req.Targets {
+	for _, target := range req.Targets {
 		err := p.archiveMask(target, zipWriter)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 
-	err = p.makeDependencyFile()
+	err = p.makeDependencyFile(req, packagesDir)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return p.pckDir(), nil
+	return pckDir, req.Ver, nil
 }
 
 //------------------------------------------------------
 
 // returns path for package directory
-func (p Packager) pckDir() string {
-	dir := fmt.Sprintf("%v/%v", p.packagesDir, p.req.Name)
+func (p Packager) pckDir(packName, packagesDir string) string {
+	dir := fmt.Sprintf("%v/%v", packagesDir, packName)
 	return dir
 }
 
 // returns path for archive file
-func (p Packager) zipPath() string {
-	zipPath := fmt.Sprintf("%v/%v", p.pckDir(), p.req.ArchiveName("tar"))
+func (p Packager) zipPath(req reqstruct.Request, packagesDir string) string {
+	zipPath := fmt.Sprintf("%v/%v", p.pckDir(req.Name, packagesDir), req.ArchiveName("tar"))
 	return zipPath
 }
 
-func (p Packager) makeDirIfNotExist() error {
-	if _, err := os.Stat(p.pckDir()); errors.Is(err, os.ErrNotExist) {
-		err = os.Mkdir(p.pckDir(), os.ModePerm)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (p Packager) makeDependencyFile() error {
+func (p Packager) makeDependencyFile(req reqstruct.Request, packagesDir string) error {
 
 	fileName := "dependency.json"
 
-	filePath := fmt.Sprintf("%v/%v", p.pckDir(), fileName)
+	filePath := fmt.Sprintf("%v/%v", p.pckDir(req.Name, packagesDir), fileName)
 
-	dep := p.req.Packets
+	dep := req.Packets
 
 	file, err := os.Create(filePath)
 	if err != nil {
