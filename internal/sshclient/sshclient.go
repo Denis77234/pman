@@ -18,12 +18,11 @@ import (
 )
 
 type Cfg struct {
-	Username     string
-	Password     string
-	PrivateKey   string
-	Server       string
-	KeyExchanges []string
-	Timeout      time.Duration
+	Username   string
+	Password   string
+	PrivateKey string
+	Server     string
+	Timeout    time.Duration
 }
 
 type Client struct {
@@ -48,21 +47,10 @@ func New(config Cfg) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) Close() {
-	if c.sftpClient != nil {
-		c.sftpClient.Close()
-	}
-	if c.sshClient != nil {
-		c.sshClient.Close()
-	}
-}
-
 func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
 	if err := c.connect(); err != nil {
-		return fmt.Errorf("Sendpack: %w", err)
+		return fmt.Errorf("sendpack: %w", err)
 	}
-
-	defer c.Close()
 
 	dirPath := destDir + packetName
 
@@ -72,7 +60,6 @@ func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
 	}
 
 	filePath := dirPath + "/" + filepath.Base(sourcePath)
-	fmt.Println(filePath)
 
 	dest, err := c.create(filePath)
 	if err != nil {
@@ -90,12 +77,18 @@ func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
 	if err != nil {
 		return err
 	}
+
+	err = os.Remove(sourcePath)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (c Client) DownloadPack(update reqstruct.Update, sourcePath, downloadTo string) error {
 	if err := c.connect(); err != nil {
-		return fmt.Errorf("DownloadPack: %w", err)
+		return fmt.Errorf("downloadPack: %w", err)
 	}
 
 	for _, file := range update.Updates {
@@ -105,7 +98,10 @@ func (c Client) DownloadPack(update reqstruct.Update, sourcePath, downloadTo str
 			return err
 		}
 
-		c.downloadZip(fp, downloadTo)
+		err = c.downloadZip(fp, downloadTo)
+		if err != nil {
+			return err
+		}
 
 		if c.IsFileExist(path + "/" + "dependency.json") {
 
@@ -163,9 +159,6 @@ func (c *Client) connect() error {
 		},
 		HostKeyCallback: func(string, net.Addr, ssh.PublicKey) error { return nil },
 		Timeout:         c.config.Timeout,
-		Config: ssh.Config{
-			KeyExchanges: c.config.KeyExchanges,
-		},
 	}
 
 	sshClient, err := ssh.Dial("tcp", c.config.Server, cfg)
