@@ -14,12 +14,12 @@ func main() {
 
 	ev := envhelper.EnvHelper{}
 
-	err := ev.LoadEnvForDirs("../../directories.env")
+	err := ev.LoadEnvForDirs("directories.env")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = ev.LoadEnvForSSH("../../sshCFG.env")
+	err = ev.LoadEnvForSSH("sshCFG.env")
 	if err != nil {
 		log.Fatal(err)
 	}

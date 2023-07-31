@@ -59,7 +59,7 @@ func (c *Client) SendPack(sourcePath, destDir, packetName string) error {
 		return err
 	}
 
-	filePath := dirPath + "/" + filepath.Base(sourcePath)
+	filePath := filepath.Join(dirPath, filepath.Base(sourcePath))
 
 	dest, err := c.create(filePath)
 	if err != nil {
@@ -92,7 +92,7 @@ func (c Client) DownloadPack(update reqstruct.Update, sourcePath, downloadTo str
 	}
 
 	for _, file := range update.Updates {
-		path := sourcePath + "/" + file.Name
+		path := filepath.Join(sourcePath, file.Name)
 		fp, err := c.findZip(path, file.Ver)
 		if err != nil {
 			return err
@@ -103,9 +103,11 @@ func (c Client) DownloadPack(update reqstruct.Update, sourcePath, downloadTo str
 			return err
 		}
 
-		if c.IsFileExist(path + "/" + "dependency.json") {
+		dependencyFilePath := filepath.Join(path, "dependency.json")
 
-			jsonValue, err := os.Open(path + "/" + "dependency.json")
+		if c.IsFileExist(dependencyFilePath) {
+
+			jsonValue, err := os.Open(dependencyFilePath)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -269,17 +271,17 @@ func (c Client) findZip(dir, ver string) (string, error) {
 		}
 	}
 
-	filePath := dir + "/" + validVersionFile
+	filePath := filepath.Join(dir, validVersionFile)
 	return filePath, nil
 }
 
 func (c Client) downloadZip(file, downloadTo string) error {
 
-	dirname := downloadTo + "/" + filepath.Base(filepath.Dir(file))
+	dirname := filepath.Join(downloadTo, filepath.Base(filepath.Dir(file)))
 
 	c.MakeDirIfNotExist(dirname)
 
-	f, err := os.Create(dirname + "/" + filepath.Base(file))
+	f, err := os.Create(filepath.Join(dirname, filepath.Base(file)))
 	if err != nil {
 		return err
 	}

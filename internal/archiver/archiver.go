@@ -29,7 +29,7 @@ func (a Archiver) Archive(packageDir, packageVer, archiveTo string) (archivePath
 		return "", err
 	}
 
-	archivePath = archiveTo + "/" + packageVer + ".zip"
+	archivePath = filepath.Join(archiveTo, fmt.Sprintf("%v%v", packageVer, ".zip"))
 
 	archive, err := os.Create(archivePath)
 	if err != nil {
@@ -60,13 +60,15 @@ func (a Archiver) Archive(packageDir, packageVer, archiveTo string) (archivePath
 //-------------------------------------
 
 func (a Archiver) pckg(packageDir, packageVer string) string {
-	pckg := packageDir + "/" + packageVer + ".zip"
+
+	pckg := filepath.Join(packageDir, fmt.Sprintf("%v%v", packageVer, ".zip"))
+
 	return pckg
 }
 
 func (a Archiver) dependencyPath(dependency string, packageDir string) string {
 
-	depPath := fmt.Sprintf("%v/%v", filepath.Dir(packageDir), dependency)
+	depPath := filepath.Join(filepath.Dir(packageDir), dependency)
 
 	return depPath
 
@@ -74,7 +76,8 @@ func (a Archiver) dependencyPath(dependency string, packageDir string) string {
 
 func (a Archiver) dependencyFilePath(packageDir string) string {
 	fileName := "dependency.json"
-	depFilePath := fmt.Sprintf("%v/%v", packageDir, fileName)
+
+	depFilePath := filepath.Join(packageDir, fileName)
 
 	return depFilePath
 
@@ -82,7 +85,7 @@ func (a Archiver) dependencyFilePath(packageDir string) string {
 
 func (a Archiver) findDepPackage(path, ver string) (string, error) {
 
-	files, err := filepath.Glob(path + "/*.zip")
+	files, err := filepath.Glob(fmt.Sprintf("%v%v", path, "/*.zip"))
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +171,7 @@ func (a Archiver) copyArchive(from string, to *zip.Writer) error {
 		packetName := filepath.Base(filepath.Dir(from))
 		version := a.Version(from)
 
-		dir := packetName + "/" + version + "/"
+		dir := filepath.Join(packetName, version+"/")
 
 		w, err := to.Create(dir + file.Name)
 		if err != nil {

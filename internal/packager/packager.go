@@ -3,7 +3,6 @@ package packager
 import (
 	"archive/zip"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"packetManager/internal/fileHelper"
@@ -30,7 +29,7 @@ func New() Packager {
 
 func (p Packager) Package(req reqstruct.Request, packagesDir string) (pckDir, pckVer string, err error) {
 
-	pckDir = p.pckDir(req.Name, packagesDir)
+	pckDir = filepath.Join(packagesDir, req.Name)
 
 	err = p.MakeDirIfNotExist(pckDir)
 	if err != nil {
@@ -65,15 +64,11 @@ func (p Packager) Package(req reqstruct.Request, packagesDir string) (pckDir, pc
 
 //------------------------------------------------------
 
-// returns path for package directory
-func (p Packager) pckDir(packName, packagesDir string) string {
-	dir := fmt.Sprintf("%v/%v", packagesDir, packName)
-	return dir
-}
-
 // returns path for archive file
 func (p Packager) zipPath(req reqstruct.Request, packagesDir string) string {
-	zipPath := fmt.Sprintf("%v/%v", p.pckDir(req.Name, packagesDir), req.ArchiveName("tar"))
+
+	zipPath := filepath.Join(packagesDir, req.Name, req.ArchiveName("zip"))
+
 	return zipPath
 }
 
@@ -81,7 +76,7 @@ func (p Packager) makeDependencyFile(req reqstruct.Request, packagesDir string) 
 
 	fileName := "dependency.json"
 
-	filePath := fmt.Sprintf("%v/%v", p.pckDir(req.Name, packagesDir), fileName)
+	filePath := filepath.Join(packagesDir, req.Name, fileName)
 
 	dep := req.Packets
 
