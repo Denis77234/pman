@@ -24,7 +24,7 @@ The package file should have `.json` format. It should include paths to select f
     {"name": "packet-3", "ver": "<=2.0"}
   ]
 }
-
+```
 ## Example Package File for Unpacking:
 **packages.json**
 
