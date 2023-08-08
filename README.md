@@ -5,8 +5,8 @@
     pman create ./packet.json: Packages the files specified in the package file into an archive and send to the server via SSH.
     pman update ./packages.json: Downloads archive files via SSH.
 
-
-    ## Package File Format
+## Package File Format
+    
 The package file should have `.json` format. It should include paths to select files using glob patterns.
 
 ## Example Package File:
@@ -25,3 +25,14 @@ The package file should have `.json` format. It should include paths to select f
   ]
 }
 
+## Example Package File for Unpacking:
+**packages.json**
+
+```json
+{
+  "packages": [
+    {"name": "packet-1", "ver": ">=1.10"},
+    {"name": "packet-2"},
+    {"name": "packet-3", "ver": "<=1.10"}
+  ]
+}
